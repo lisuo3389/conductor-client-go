@@ -15,7 +15,8 @@ package sample
 
 import (
 	"log"
-	"conductor/task"
+
+	"github.com/lisuo3389/conductor-client-go/task"
 )
 
 // Implementation for "task_2"
@@ -25,7 +26,7 @@ func Task_2_Execution_Function(t *task.Task) (taskResult *task.TaskResult, err e
 	//Do some logic
 	taskResult = task.NewTaskResult(t)
 
-	output := map[string]interface{}{"task":"task_2", "key2":"value2", "key3":3, "key4":false}
+	output := map[string]interface{}{"task": "task_2", "key2": "value2", "key3": 3, "key4": false}
 	taskResult.OutputData = output
 	taskResult.Status = "COMPLETED"
 	err = nil

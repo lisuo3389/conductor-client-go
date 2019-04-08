@@ -14,8 +14,8 @@
 package main
 
 import (
-	"conductor"
-	"conductor/task/sample"
+	"github.com/lisuo3389/conductor-client-go"
+	"github.com/lisuo3389/conductor-client-go/task/sample"
 )
 
 func main() {

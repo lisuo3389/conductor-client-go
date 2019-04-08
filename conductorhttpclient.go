@@ -14,10 +14,11 @@
 package conductor
 
 import (
-	"conductor/httpclient"
 	"fmt"
 	"log"
 	"strconv"
+
+	"github.com/lisuo3389/conductor-client-go/httpclient"
 )
 
 type ConductorHttpClient struct {

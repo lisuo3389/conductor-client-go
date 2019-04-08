@@ -14,10 +14,11 @@
 package conductor
 
 import (
-	"conductor/task"
 	"log"
 	"os"
 	"time"
+
+	"github.com/lisuo3389/conductor-client-go/task"
 )
 
 var (
