@@ -14,6 +14,7 @@
 package conductor
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -31,10 +32,14 @@ func init() {
 	}
 }
 
+type TaskExecuteFunction func(t *task.Task) (*task.TaskResult, error)
+
+
 type ConductorWorker struct {
 	ConductorHttpClient *ConductorHttpClient
 	ThreadCount         int
 	PollingInterval     int
+	ctxMap map[string]context.CancelFunc
 }
 
 func NewConductorWorker(baseUrl string, threadCount int, pollingInterval int) *ConductorWorker {
@@ -43,64 +48,93 @@ func NewConductorWorker(baseUrl string, threadCount int, pollingInterval int) *C
 	conductorWorker.PollingInterval = pollingInterval
 	conductorHttpClient := NewConductorHttpClient(baseUrl)
 	conductorWorker.ConductorHttpClient = conductorHttpClient
+	conductorWorker.ctxMap = map[string]context.CancelFunc{}
 	return conductorWorker
 }
 
-func (c *ConductorWorker) Execute(t *task.Task, executeFunction func(t *task.Task) (*task.TaskResult, error)) {
-	taskResult, err := executeFunction(t)
-	if err != nil {
-		log.Println("Error Executing task:", err.Error())
-		taskResult.Status = task.FAILED
-		taskResult.ReasonForIncompletion = err.Error()
-	}
-
-	taskResultJsonString, err := taskResult.ToJSONString()
-	if err != nil {
-		log.Println(err.Error())
-		log.Println("Error Forming TaskResult JSON body")
-		return
-	}
-	c.ConductorHttpClient.UpdateTask(taskResultJsonString)
+func (c *ConductorWorker) Execute(t *task.Task, executeFunction TaskExecuteFunction) {
+		taskResult, err := executeFunction(t)
+		if err != nil {
+			log.Println("Error Executing task:", err.Error())
+			taskResult.Status = task.FAILED
+			taskResult.ReasonForIncompletion = err.Error()
+		}
+		taskResultJsonString, err := taskResult.ToJSONString()
+		if err != nil {
+			log.Println(err.Error())
+			log.Println("Error Forming TaskResult JSON body")
+			return
+		}
+		c.ConductorHttpClient.UpdateTask(taskResultJsonString)
 }
 
-func (c *ConductorWorker) PollAndExecute(taskType string, executeFunction func(t *task.Task) (*task.TaskResult, error)) {
+func (c *ConductorWorker) ackTask( ctx context.Context, taskId, workflowId string, responseTimeoutSeconds int )  {
+	_, ackErr := c.ConductorHttpClient.AckTask(taskId, workflowId)
+	if ackErr != nil {
+		log.Println("Error Acking task:", ackErr.Error())
+	}
 	for {
-		time.Sleep(time.Duration(c.PollingInterval) * time.Millisecond)
-
-		// Poll for Task taskType
-		polled, err := c.ConductorHttpClient.PollForTask(taskType, hostname)
-		if err != nil {
-			log.Println("Error Polling task:", err.Error())
-			continue
+		select {
+		case <- ctx.Done():
+			return
+		case <- time.After( time.Duration(responseTimeoutSeconds - 2) * time.Second):
+			_, ackErr = c.ConductorHttpClient.AckTask(taskId, workflowId)
+			if ackErr != nil {
+				log.Println("Error Acking task:", ackErr.Error())
+			}
+			log.Printf("Acking task: %s", taskId)
 		}
-		if polled == "" {
-			log.Println("No task found for:", taskType)
-			continue
-		}
-
-		// Parse Http response into Task
-		parsedTask, err := task.ParseTask(polled)
-		if err != nil {
-			log.Println("Error Parsing task:", err.Error())
-			continue
-		}
-
-		// Found a task, so we send an Ack
-		_, ackErr := c.ConductorHttpClient.AckTask(parsedTask.TaskId, parsedTask.WorkerId)
-		if ackErr != nil {
-			log.Println("Error Acking task:", ackErr.Error())
-			continue
-		}
-
-		// Execute given function
-		c.Execute(parsedTask, executeFunction)
 	}
 }
 
-func (c *ConductorWorker) Start(taskType string, executeFunction func(t *task.Task) (*task.TaskResult, error), wait bool) {
+func (c *ConductorWorker) PollAndExecute(ctx context.Context, taskType string, executeFunction TaskExecuteFunction ){
+	for {
+		select {
+		case <- time.After(time.Duration(c.PollingInterval) * time.Microsecond):
+			// Poll for Task taskType
+			polled, err := c.ConductorHttpClient.PollForTask(taskType, hostname)
+			if err != nil {
+				log.Println("Error Polling task:", err.Error())
+				continue
+			}
+			if polled == "" {
+				log.Println("No task found for:", taskType)
+				continue
+			}
+
+			// Parse Http response into Task
+			parsedTask, err := task.ParseTask(polled)
+			if err != nil {
+				log.Println("Error Parsing task:", err.Error())
+				continue
+			}
+
+			// Found a task, so we send an Ack
+			taskCtx, cancel  := context.WithCancel(context.Background())
+			c.ctxMap[parsedTask.TaskId] = cancel
+			defer cancel()
+
+			go c.ackTask(taskCtx, parsedTask.TaskId, parsedTask.WorkerId, parsedTask.ResponseTimeoutSeconds)
+
+			// Execute given function
+			c.Execute(parsedTask, executeFunction)
+
+			// quit ack
+			cancel()
+			delete(c.ctxMap, parsedTask.TaskId)
+		 case <- ctx.Done():
+		 	for taskId, cancel := range  c.ctxMap{
+		 		log.Printf("quit ack %s done", taskId)
+		 		cancel()
+			}
+		}
+	}
+}
+
+func (c *ConductorWorker) Start(ctx context.Context , taskType string, executeFunction TaskExecuteFunction, wait bool) {
 	log.Println("Polling for task:", taskType, "with a:", c.PollingInterval, "(ms) polling interval with", c.ThreadCount, "goroutines for task execution, with workerid as", hostname)
 	for i := 1; i <= c.ThreadCount; i++ {
-		go c.PollAndExecute(taskType, executeFunction)
+		go c.PollAndExecute(ctx, taskType, executeFunction)
 	}
 
 	// wait infinitely while the go routines are running
