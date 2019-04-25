@@ -68,21 +68,23 @@ func (c *ConductorWorker) Execute(t *task.Task, executeFunction TaskExecuteFunct
 		c.ConductorHttpClient.UpdateTask(taskResultJsonString)
 }
 
-func (c *ConductorWorker) ackTask( ctx context.Context, taskId, workflowId string, responseTimeoutSeconds int )  {
-	_, ackErr := c.ConductorHttpClient.AckTask(taskId, workflowId)
-	if ackErr != nil {
-		log.Println("Error Acking task:", ackErr.Error())
-	}
+func (c *ConductorWorker) UpdateTask( ctx context.Context, t *task.Task )  {
+
 	for {
 		select {
 		case <- ctx.Done():
 			return
-		case <- time.After( time.Duration(responseTimeoutSeconds - 2) * time.Second):
-			_, ackErr = c.ConductorHttpClient.AckTask(taskId, workflowId)
-			if ackErr != nil {
-				log.Println("Error Acking task:", ackErr.Error())
+		case <- time.After( time.Duration(t.ResponseTimeoutSeconds - 1) * time.Second):
+			taskResult := task.NewTaskResult(t)
+			taskResult.Status = task.TaskResultStatus(task.IN_PROGRESS)
+			taskResult.CallbackAfterSeconds = int64(t.ResponseTimeoutSeconds - 1)
+			taskResultJsonString, err := taskResult.ToJSONString()
+			if err != nil {
+				log.Println(err.Error())
+				log.Println("Error Forming TaskResult JSON body")
+				return
 			}
-			log.Printf("Acking task: %s", taskId)
+			c.ConductorHttpClient.UpdateTask(taskResultJsonString)
 		}
 	}
 }
@@ -110,11 +112,18 @@ func (c *ConductorWorker) PollAndExecute(ctx context.Context, taskType string, e
 			}
 
 			// Found a task, so we send an Ack
+			_, ackErr := c.ConductorHttpClient.AckTask(parsedTask.TaskId, parsedTask.WorkerId)
+			if ackErr != nil {
+				log.Println("Error Acking task:", ackErr.Error())
+				continue
+			}
+
 			taskCtx, cancel  := context.WithCancel(context.Background())
 			c.ctxMap[parsedTask.TaskId] = cancel
 			defer cancel()
 
-			go c.ackTask(taskCtx, parsedTask.TaskId, parsedTask.WorkerId, parsedTask.ResponseTimeoutSeconds)
+			go c.UpdateTask(taskCtx, parsedTask)
+
 
 			// Execute given function
 			c.Execute(parsedTask, executeFunction)
