@@ -69,21 +69,21 @@ func (c *ConductorWorker) Execute(t *task.Task, executeFunction TaskExecuteFunct
 }
 
 func (c *ConductorWorker) UpdateTask( ctx context.Context, t *task.Task )  {
-
+	taskResult := task.NewTaskResult(t)
+	taskResult.Status = task.TaskResultStatus(task.IN_PROGRESS)
+	taskResult.CallbackAfterSeconds = int64(t.ResponseTimeoutSeconds - 1)
+	taskResultJsonString, err := taskResult.ToJSONString()
+	if err != nil {
+		log.Println(err.Error())
+		log.Println("Error Forming TaskResult JSON body")
+		return
+	}
+	c.ConductorHttpClient.UpdateTask(taskResultJsonString)
 	for {
 		select {
 		case <- ctx.Done():
 			return
 		case <- time.After( time.Duration(t.ResponseTimeoutSeconds - 1) * time.Second):
-			taskResult := task.NewTaskResult(t)
-			taskResult.Status = task.TaskResultStatus(task.IN_PROGRESS)
-			taskResult.CallbackAfterSeconds = int64(t.ResponseTimeoutSeconds - 1)
-			taskResultJsonString, err := taskResult.ToJSONString()
-			if err != nil {
-				log.Println(err.Error())
-				log.Println("Error Forming TaskResult JSON body")
-				return
-			}
 			c.ConductorHttpClient.UpdateTask(taskResultJsonString)
 		}
 	}
