@@ -268,6 +268,18 @@ func (c *ConductorHttpClient) GetWorkflow(workflowId string, includeTasks bool) 
 	}
 }
 
+func (c *ConductorHttpClient) RecovermWorkflow(workflowId string, taskReferenceName string) (error) {
+	url := c.httpClient.MakeUrl("/workflow/{workflowId}/recover/{taskReferenceName}", "{workflowId}", workflowId, "{taskReferenceName}", taskReferenceName)
+
+	_, err := c.httpClient.Post(url, nil, nil, "")
+	if err != nil {
+		log.Println("Error while trying to Skip Task From Workflow", workflowId, err)
+		return  err
+	} else {
+		return nil
+	}
+}
+
 func (c *ConductorHttpClient) GetRunningWorkflows(workflowName string, version int, startTime float64, endTime float64) (string, error) {
 	url := c.httpClient.MakeUrl("/workflow/running/{workflowName}", "{workflowName}", workflowName)
 	versionString := "1"
