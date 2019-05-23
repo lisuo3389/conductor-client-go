@@ -14,13 +14,13 @@
 package httpclient
 
 import (
+    "bytes"
+    "fmt"
+    "io/ioutil"
     "log"
     "net"
     "net/http"
-    "io/ioutil"
-    "bytes"
     "strings"
-    "fmt"
     "time"
 )
 
@@ -116,20 +116,19 @@ func (c *HttpClient) httpRequest(url string, requestType string, headers map[str
         return "", err
     }
 
-    // If successful HTTP call, but Client/Server error, we return error
-    if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-        return "", fmt.Errorf("%d Http Client Error for url: %s", resp.StatusCode, url)
-    }
-    if resp.StatusCode >= 500 && resp.StatusCode < 600 {
-        return "", fmt.Errorf("%d Http Server Error for url: %s", resp.StatusCode, url)
-    }
-
     defer resp.Body.Close()
     response, err := ioutil.ReadAll(resp.Body)
     responseString := string(response)
     if err != nil {
         log.Println("ERROR reading response for URL: ", url)
         return "", err
+    }
+    // If successful HTTP call, but Client/Server error, we return error
+    if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+        return "", fmt.Errorf("%d Http Client Error for url: %s", resp.StatusCode, url)
+    }
+    if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+        return "", fmt.Errorf("%d Http Server Error for url: %s", resp.StatusCode, url)
     }
 
     if c.PrintLogs {
