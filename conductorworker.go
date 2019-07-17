@@ -74,7 +74,6 @@ func (c *ConductorWorker) PollAndExecute(taskType string, executeFunction func(t
 			continue
 		}
 		if polled == "" {
-			log.Println("No task found for:", taskType)
 			continue
 		}
 
@@ -84,6 +83,7 @@ func (c *ConductorWorker) PollAndExecute(taskType string, executeFunction func(t
 			log.Println("Error Parsing task:", err.Error())
 			continue
 		}
+		log.Println("Found task for:", taskType)
 
 		// Found a task, so we send an Ack
 		_, ackErr := c.ConductorHttpClient.AckTask(parsedTask.TaskId, parsedTask.WorkerId)
