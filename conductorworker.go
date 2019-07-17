@@ -37,11 +37,11 @@ type ConductorWorker struct {
 	PollingInterval     int
 }
 
-func NewConductorWorker(baseUrl string, threadCount int, pollingInterval int) *ConductorWorker {
+func NewConductorWorker(baseUrl string, threadCount int, pollingInterval int, printLog bool) *ConductorWorker {
 	conductorWorker := new(ConductorWorker)
 	conductorWorker.ThreadCount = threadCount
 	conductorWorker.PollingInterval = pollingInterval
-	conductorHttpClient := NewConductorHttpClient(baseUrl)
+	conductorHttpClient := NewConductorHttpClient(baseUrl, printLog)
 	conductorWorker.ConductorHttpClient = conductorHttpClient
 	return conductorWorker
 }
