@@ -175,6 +175,18 @@ func (c *ConductorHttpClient) GetTask(taskId string) (string, error) {
 		return outputString, nil
 	}
 }
+func (c *ConductorHttpClient) GetInProgressTask(workflowID, taskRefName string) (string, error) {
+	url := c.httpClient.MakeUrl("/tasks/in_progress/{workflowId}/{taskRefName}",
+		"{workflowId}", workflowID, "{taskRefName}",  taskRefName)
+	outputString, err := c.httpClient.Get(url, nil, nil)
+	if err != nil {
+		log.Println("Error while trying to Get Task", taskRefName, err)
+		return "", err
+	} else {
+		return outputString, nil
+	}
+}
+
 
 func (c *ConductorHttpClient) UpdateTask(taskBody string) (string, error) {
 	url := c.httpClient.MakeUrl("/tasks")
