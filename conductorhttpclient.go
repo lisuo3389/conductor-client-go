@@ -33,6 +33,17 @@ func NewConductorHttpClient(baseUrl string, printLog bool) *ConductorHttpClient 
 	return conductorClient
 }
 
+func (c *ConductorHttpClient)Health()(string, error)  {
+	url := c.httpClient.MakeUrl("/health")
+	outputString, err := c.httpClient.Get(url, nil, nil)
+	if err != nil {
+		log.Println("Error while trying to health", err)
+		return "", err
+	} else {
+		return outputString, nil
+	}
+}
+
 /**********************/
 /* Metadata Functions */
 /**********************/
